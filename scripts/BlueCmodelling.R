@@ -77,7 +77,7 @@ CF2 <- CF %>%
 DFc <- DF2 %>%
   left_join(CF2)
 
-View(DFc)
+#View(DFc)
 
 DFc2 <- DFc %>%
   mutate(estCfactorS = as.numeric(estCfactorS)) %>%
@@ -314,27 +314,30 @@ data7 <- DF3 %>%
   
 checking_100 <- ggplot(data7, aes(x = Mean_c*100, y = c_dens)) +
   geom_point() +
-  xlab("Mean C gC / cm^3") +
-  ylab("C density 100 cm") +
+  xlab("C Stock est by Mean C (gC / cm^2)") +
+  ylab("C Stock est by model (gC / cm^2)") +
+  ggtitle("Carbon Stock to 100 cm (line is 1:1)") +
   geom_abline(intercept = 0, slope = 1)
 checking_100
-ggsave("Pred vs mean C_dens 100cm.pdf", path = "./figures/", width = 4, height = 4)
+ggsave("Pred vs mean C_Stock 100cm.pdf", path = "./figures/", width = 4, height = 4)
 
 checking_60 <- ggplot(data7, aes(x = Mean_c*60, y = c_60a)) +
   geom_point() +
-  xlab("Mean C gC / cm^3") +
-  ylab("C density 60 cm") +
+  xlab("C Stock est by Mean C (gC / cm^2)") +
+  ylab("C Stock est by model (gC / cm^2)") +
+  ggtitle("Carbon Stock to 60 cm (line is 1:1)") +
   geom_abline(intercept = 0, slope = 1)
 checking_60
-ggsave("Pred vs mean C_dens 60cm.pdf", path = "./figures/", width = 4, height = 4)
+ggsave("Pred vs mean C stock 60cm.pdf", path = "./figures/", width = 4, height = 4)
 
 checking_25 <- ggplot(data7, aes(x = Mean_c*25, y = c_25a)) +
   geom_point() +
-  xlab("Mean C gC / cm^3") +
-  ylab("C density 25 cm") +
+  xlab("C Stock est by Mean C (gC / cm^2)") +
+  ylab("C Stock est by model (gC / cm^2)") +
+  ggtitle("Carbon Stock to 25 cm (line is 1:1)") +
   geom_abline(intercept = 0, slope = 1)
 checking_25
-ggsave("Pred vs mean C_dens 25cm.pdf", path = "./figures/", width = 4, height = 4)
+ggsave("Pred vs mean C stock 25cm.pdf", path = "./figures/", width = 4, height = 4)
 
 
 
