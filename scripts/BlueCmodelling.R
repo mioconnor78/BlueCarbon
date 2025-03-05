@@ -205,7 +205,7 @@ mod7 <- lme(log(c_dens) ~1, data = DF3, random = ~corr_segment_midpoint | Site/C
 
 ## all site + core level predictors
 
-mod8 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + (Corrected_Midpoint_cm), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod8 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + (corr_segment_midpoint), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 mod9 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
@@ -213,7 +213,7 @@ mod11 <- lme(log(c_dens) ~1 + log(REI_Raw) + log(Watercourse_NEAR_DIST.x) + Coas
 
 mod12 <- lme(log(c_dens) ~1 + Type + log(Watercourse_NEAR_DIST.x) + Coast + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod13 <- lme(log(c_dens) ~1 + Type + log(Watercourse_NEAR_DIST.x) + Coast + Corrected_Midpoint_cm + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod13 <- lme(log(c_dens) ~1 + Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 mod14 <- lme(log(c_dens) ~1 + Type + Coast + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
@@ -244,7 +244,9 @@ model.sel(mod0, mod1, mod2,mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod11, mod1
 plot(predict(mod18), log(DF3$c_dens))
 plot(predict(mod15), log(DF3$c_dens))
 plot(predict(mod12), log(DF3$c_dens))
-plot(exp(predict(mod18)), DF3$c_dens)
+## best with readily available predictors
+plot(predict(mod18a), log(DF3$c_dens)) # pretty similar
+plot(exp(predict(mod18a)), DF3$c_dens) # not too bad
 
 
 
@@ -265,39 +267,20 @@ predict(fm1, newOrth, level = 0:1)
 
 
 
-# Predicting values -------------------------------------------------------
+# Predicting C_stocks from C_dens models -------------------------------------------------------
 
 #C_density
 
-## create the new data frame with the depths we want to predict C_dens for
-new_data <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 5), corr_segment_midpoint = rep(c("5", "25", "30", "60", "100"), times = 84)) 
-                       
+## create the new data frame with the depths we want to predict C_dens for: 1 - 100 cm
+ 
+new_data4 <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), corr_segment_midpoint = rep(c(1:100), times = 84)) 
+                      
 #merge new_data with DF3 to get site level variables: Site, REI_Raw, Type, Watercourse_NEAR_DIST.x
 #how to get Percent.Silt.Fraction? this is a segment level variable. use mean silt val for core. 
 
 Site_info <- DF3 %>% 
   group_by(Site, CoreName_2, REI_Raw, Type, Watercourse_NEAR_DIST.x) %>%
   summarise(mud = mean(Percent.Silt.Fraction)) 
-
-new_data2 <- new_data %>%
-  left_join(Site_info) %>%
-  rename(Percent.Silt.Fraction = mud) %>%
-  mutate(corr_segment_midpoint = as.numeric(corr_segment_midpoint))
-
-predicted_vals <- predict(mod18, new_data2, level = 0:2)
-
-pred_vals <- predicted_vals %>%
-  separate(CoreName_2, into = c("Site", "CoreName_2"),
-         sep ="/") %>%
-  mutate(corr_segment_midpoint = as.numeric(rep(c("5", "25", "30", "60", "100"), times = 84)))
-
-new_data3 <- new_data2 %>%
-  left_join(pred_vals)
-
-#ok - i now have C_dens predicted at the various depths. Now i need the cumulative C. so added up 1 - 100. i think the approach will be to repeat what i did above for each cm (so 100 rows per core). then do a summarize of those values at the end. 
-
-# predicting new values - do it for each cm 1-100
-new_data4 <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), corr_segment_midpoint = rep(c(1:100), times = 84)) 
 
 #use site level variables from above
 new_data5 <- new_data4 %>%
@@ -329,30 +312,35 @@ data7 <- DF3 %>%
   summarise(Mean_c = mean(c_dens)) %>%
   left_join(new_data6)
   
-checking_100 <- ggplot(data7, aes(x = Mean_c, y = c_dens)) +
+checking_100 <- ggplot(data7, aes(x = Mean_c*100, y = c_dens)) +
   geom_point() +
   xlab("Mean C gC / cm^3") +
-  ylab("C density 100 cm")
+  ylab("C density 100 cm") +
+  geom_abline(intercept = 0, slope = 1)
 checking_100
 ggsave("Pred vs mean C_dens 100cm.pdf", path = "./figures/", width = 4, height = 4)
 
-checking_60 <- ggplot(data7, aes(x = Mean_c, y = c_60a)) +
+checking_60 <- ggplot(data7, aes(x = Mean_c*60, y = c_60a)) +
   geom_point() +
   xlab("Mean C gC / cm^3") +
-  ylab("C density 60 cm")
+  ylab("C density 60 cm") +
+  geom_abline(intercept = 0, slope = 1)
 checking_60
 ggsave("Pred vs mean C_dens 60cm.pdf", path = "./figures/", width = 4, height = 4)
 
-checking_25 <- ggplot(data7, aes(x = Mean_c, y = c_25a)) +
+checking_25 <- ggplot(data7, aes(x = Mean_c*25, y = c_25a)) +
   geom_point() +
   xlab("Mean C gC / cm^3") +
-  ylab("C density 25 cm")
+  ylab("C density 25 cm") +
+  geom_abline(intercept = 0, slope = 1)
 checking_25
 ggsave("Pred vs mean C_dens 25cm.pdf", path = "./figures/", width = 4, height = 4)
 
 
 
 # Modeling carbon stock ---------------------------------------------------
+
+## i'm not sure if it make sense to analyze carbon stock here, b/c i estimated it above from the c_dens model already. should we do both?
 
 # Modeling Carbon Stock with ranef for depth effect
 mod0.1 <- lme(log(c_stock + 0.01) ~ 1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | CoreName_2, method = "ML")
@@ -420,6 +408,82 @@ mod25 <- lme(log(c_stock + 0.01) ~1 + log(REI_Raw)*Type + corr_segment_midpoint 
 
 
 model.sel(mod0, mod1, mod2,mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod11, mod12, mod13, mod14, mod15, mod16, mod17, mod18, mod19, mod20,  mod23, mod24, mod25)
+
+## comparing predicted vs observed values
+plot(predict(mod11), log(DF3$c_stock))
+
+
+# Predicting C_stocks from C_stock models -------------------------------------------------------
+
+#this is not quite working; i haven't dealt with the +0.01 yet from the model. i'm too tired to figure this out now, so don't use this yet!
+
+## create the new data frame with the depths we want to predict C_stock for: 1 - 100 cm
+
+new_data4s <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), corr_segment_midpoint = rep(c(1:100), times = 84)) 
+
+#merge new_data with DF3 to get site level variables: Site, REI_Raw, Type, Watercourse_NEAR_DIST.x
+#how to get Percent.Silt.Fraction? this is a segment level variable. use mean silt val for core. 
+
+Site_info_s <- DF3 %>% 
+  group_by(Site, CoreName_2, REI_Raw, Type, Coast, Watercourse_NEAR_DIST.x) %>%
+  summarise(mud = mean(Percent.Silt.Fraction)) 
+
+#use site level variables from above
+new_data5s <- new_data4s %>%
+  left_join(Site_info_s) %>%
+  rename(Percent.Silt.Fraction = mud) %>%
+  mutate(corr_segment_midpoint = as.numeric(corr_segment_midpoint))
+
+predicted_vals <- predict(mod11, new_data5s, level = 0:2)
+
+pred_vals_s <- predicted_vals %>%
+  separate(CoreName_2, into = c("Site", "CoreName_2"),
+           sep ="/") %>%
+  mutate(corr_segment_midpoint = rep(c(1:100), times = 84)) %>%
+  mutate(c_stock = exp(predict.CoreName_2))
+
+new_data6s <- new_data5s %>%
+  left_join(pred_vals_s) %>% 
+  group_by(Site, CoreName_2, REI_Raw, Type, Watercourse_NEAR_DIST.x) %>%
+  mutate(c_60s = ifelse(corr_segment_midpoint < 61, c_stock, 0)) %>%
+  mutate(c_25s = ifelse(corr_segment_midpoint < 26, c_stock, 0)) %>%
+  summarise_at(., c("c_stock", "c_60s", "c_25s"), sum)
+
+write.csv(new_data6, file = "predicted.csv")
+
+
+## checking
+data7s <- DF3 %>%
+  group_by(CoreName_2) %>%
+  summarise(Mean_s = mean(c_stock)) %>%
+  left_join(new_data6s)
+
+checking_100_s <- ggplot(data7s, aes(x = Mean_s*100, y = c_stock)) +
+  geom_point() +
+  xlab("Mean C gC / cm^2") +
+  ylab("C stock 100 cm") +
+  geom_abline(intercept = 0, slope = 1)
+checking_100_s
+ggsave("Pred vs mean C_stock 100cm.pdf", path = "./figures/", width = 4, height = 4)
+
+checking_60_s <- ggplot(data7s, aes(x = Mean_s*60, y = c_60s)) +
+  geom_point() +
+  xlab("Mean C gC / cm^2") +
+  ylab("C stock 60 cm") +
+  geom_abline(intercept = 0, slope = 1)
+checking_60_s
+ggsave("Pred vs mean C_stock 60cm.pdf", path = "./figures/", width = 4, height = 4)
+
+checking_25_s <- ggplot(data7s, aes(x = Mean_s*25, y = c_25s)) +
+  geom_point() +
+  xlab("Mean C gC / cm^3") +
+  ylab("C stock 25 cm") +
+  geom_abline(intercept = 0, slope = 1)
+checking_25_s
+ggsave("Pred vs mean C_stock 25cm.pdf", path = "./figures/", width = 4, height = 4)
+
+
+
 
 # Modeling OC_Per ---------------------------------------------------------
 ## this is out of date now
