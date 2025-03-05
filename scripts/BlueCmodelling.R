@@ -240,6 +240,7 @@ mod25 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + corr_segment_midpoint + sqrt(P
 
 model.sel(mod0, mod1, mod2,mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod11, mod12, mod13, mod14, mod15, mod16, mod17, mod18, mod18a, mod19, mod20,  mod23, mod24, mod25)
 
+## comparing predicted vs observed values
 plot(predict(mod18), log(DF3$c_dens))
 plot(predict(mod15), log(DF3$c_dens))
 plot(predict(mod12), log(DF3$c_dens))
@@ -247,12 +248,12 @@ plot(exp(predict(mod18)), DF3$c_dens)
 
 
 
-
+# Example of predicting ---------------------------------------------------
 
 ## predicting: example: https://rdrr.io/cran/nlme/man/predict.lme.html
 # and https://stats.stackexchange.com/questions/234618/meaning-of-predict-fixed-and-predict-subject-values-in-predict-function-of-nlm
 
-# so i think i need the 'new dataset' with the fixed effects levels for each site, core, and add in depths of 25, 60 and 100, and have the model give me those c_dens values for those cores.
+# I need the 'new dataset' with the fixed effects levels for each site, core, and add in depths of 25, 60 and 100, and have the model give me those c_dens values for those cores.
 
 View(Orthodont)
 fm1 <- lme(distance ~ age, Orthodont, random = ~ age | Subject)
@@ -263,15 +264,16 @@ newOrth <- data.frame(Sex = c("Male","Male","Female","Female","Male","Male"),
 predict(fm1, newOrth, level = 0:1)
 
 
+
 # Predicting values -------------------------------------------------------
 
 #C_density
 
-#figuring it out
+## create the new data frame with the depths we want to predict C_dens for
 new_data <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 5), corr_segment_midpoint = rep(c("5", "25", "30", "60", "100"), times = 84)) 
                        
-#merge with DF3 to get site level variables: Site, REI_Raw, Type, Watercourse_NEAR_DIST.x
-#how to get Percent.Silt.Fraction. this is a segment level variable. use mean silt val for core. 
+#merge new_data with DF3 to get site level variables: Site, REI_Raw, Type, Watercourse_NEAR_DIST.x
+#how to get Percent.Silt.Fraction? this is a segment level variable. use mean silt val for core. 
 
 Site_info <- DF3 %>% 
   group_by(Site, CoreName_2, REI_Raw, Type, Watercourse_NEAR_DIST.x) %>%
@@ -292,14 +294,12 @@ pred_vals <- predicted_vals %>%
 new_data3 <- new_data2 %>%
   left_join(pred_vals)
 
-#ok - i now have C_dens predicted at the various depths. Now i need the cumulative C. so added up 1 - 100. i think the approach will be to repeat what i did above for each cm (so 100 rows per core). then do a summarize of those values at the end. let's try real quick.
-## it may have worked! now go back to the ms to update methods and see if these numbers are useful.
+#ok - i now have C_dens predicted at the various depths. Now i need the cumulative C. so added up 1 - 100. i think the approach will be to repeat what i did above for each cm (so 100 rows per core). then do a summarize of those values at the end. 
 
 # predicting new values - do it for each cm 1-100
 new_data4 <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), corr_segment_midpoint = rep(c(1:100), times = 84)) 
 
 #use site level variables from above
-
 new_data5 <- new_data4 %>%
   left_join(Site_info) %>%
   rename(Percent.Silt.Fraction = mud) %>%
@@ -334,41 +334,25 @@ checking_100 <- ggplot(data7, aes(x = Mean_c, y = c_dens)) +
   xlab("Mean C gC / cm^3") +
   ylab("C density 100 cm")
 checking_100
-ggsave("100cm.pdf", width = 4, height = 4)
+ggsave("Pred vs mean C_dens 100cm.pdf", path = "./figures/", width = 4, height = 4)
 
 checking_60 <- ggplot(data7, aes(x = Mean_c, y = c_60a)) +
   geom_point() +
   xlab("Mean C gC / cm^3") +
   ylab("C density 60 cm")
 checking_60
-ggsave("60cm.pdf", width = 4, height = 4)
+ggsave("Pred vs mean C_dens 60cm.pdf", path = "./figures/", width = 4, height = 4)
 
 checking_25 <- ggplot(data7, aes(x = Mean_c, y = c_25a)) +
   geom_point() +
   xlab("Mean C gC / cm^3") +
   ylab("C density 25 cm")
 checking_25
-ggsave("25cm.pdf", width = 4, height = 4)
+ggsave("Pred vs mean C_dens 25cm.pdf", path = "./figures/", width = 4, height = 4)
 
 
-
-
-#other stuff
-simple <- DF3 %>%
-  select(Site, CoreName_2, Percent.Silt.Fraction, corr_segment_midpoint)
-
-View(simple[order(simple$CoreName_2, simple$corr_segment_midpoint),])
-
-predicted_vals <- predict(mod18, new_data, level = 0:2)
-
-PV2 <- predicted_vals %>%
-  mutate(P_c_dens = )
-
-# ok that's working, now just need to get it to work for site/core
 
 # Modeling carbon stock ---------------------------------------------------
-
-
 
 # Modeling Carbon Stock with ranef for depth effect
 mod0.1 <- lme(log(c_stock + 0.01) ~ 1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | CoreName_2, method = "ML")
@@ -438,7 +422,7 @@ mod25 <- lme(log(c_stock + 0.01) ~1 + log(REI_Raw)*Type + corr_segment_midpoint 
 model.sel(mod0, mod1, mod2,mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod11, mod12, mod13, mod14, mod15, mod16, mod17, mod18, mod19, mod20,  mod23, mod24, mod25)
 
 # Modeling OC_Per ---------------------------------------------------------
-
+## this is out of date now
 
 #Testing all parameters
 mod0 <- lme(log(OC_Per) ~1 + log(REI_Raw)*Type + intertidal + log(Watercourse_NEAR_DIST.x) + Coast + log(Corrected_DBD_g_cm3) + Corrected_Midpoint_cm_rounded + sqrt(Percent.Silt.Fraction), data = DF, random = ~Corrected_Midpoint_cm | Site/CoreName_2, method = "REML")
@@ -670,7 +654,7 @@ LOI_c_OC <- ggplot(DFF, aes(x = log(LOI_Percent), y = log(OC_Per.x))) +
 
 LOI_c_OC
 
-ggsave("LOI_OC.pdf", width = 4, height = 4)
+ggsave("LOI_OC.pdf", path = "./figures", width = 4, height = 4)
 
 ## ok next steps: 
 # make a clean plot, with appropriate scale - done
