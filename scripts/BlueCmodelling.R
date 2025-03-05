@@ -1,4 +1,5 @@
-## Mary's working with the files
+## Mary's analysis of Matt's data Feb 2025
+
 ## packages
 library(tidyverse)
 library(nlme)
@@ -8,22 +9,22 @@ library(ggplot2)
 
 
 #Read in data ----
-DF <- read.csv(file = "WongChristensenDataforModellingOct19.csv")
-DF_LOI <- read.csv(file = "BlueCarbonData_1.csv")
-CF <- read.csv(file = "compaction.csv")
+DF <- read.csv(file = "./data/WongChristensenDataforModellingOct19.csv")
+DF_LOI <- read.csv(file = "./data/BlueCarbonData_1.csv")
+CF <- read.csv(file = "./data/compaction.csv")
 #DF$intertidal <- ifelse(DF$Elevation > "0", "intertidal", "subtidal")
 #DF$Coast_no <- DF[, DF$Coast == "Atlantic"] 
 DF$c_dens <- DF$OC_Per*DF$Corrected_DBD_g_cm3 # C (g / cm3)
 DF$Site <- factor(DF$Site)
 DF$Type <- factor(DF$Type)
 
-#remove row 430, appears to be a dupblicate
 
-# without GoL
-DF_noGSL <- DF %>%
-  filter(Coast != "Gulf of St.Lawrence")
+# Data cleaning and reconstruction  ---------------------------------------
+
+#remove row 430, appears to be a duplicate
 
 ## reconstructing core compaction correction factors
+
 ## we can't find Matt's original core length data, but based on his thesis, he used a single correction factor for each core (as opposed to a different correction factor for each segment). The data appear to use a slightly different correction factor for each segment. For the ones that produce negative values, i propose we adjust those correction factors to match those for the rest of the core, assuming that that a correction factor >1 is an error.
 
 DF$estCfactorS <- ifelse(DF$Extracted_IntervalStart_Depth_c != "0",  DF$Extracted_IntervalStart_Depth_cm/DF$Corrected_IntervalStart_Depth_cm, "0")
@@ -32,15 +33,14 @@ DF$estCfactorS <- ifelse(DF$Extracted_IntervalStart_Depth_c != "0",  DF$Extracte
 
 #plot(DF$Extracted_IntervalStart_Depth_cm, DF$estCfactorS)
 
-# discovered some weird numbers, looking into it. 
-
+## discovered some weird numbers, looking into it. 
 # create a datafile mean and sd est conversion factors to identify possible errors
 DF_cores <- DF %>%
   group_by(SiteCode, Core.Number) %>%
   filter(estCfactorS != "0") %>%
   summarise(meanCF = mean(as.numeric(as.character(estCfactorS))), sdCF = sd(estCfactorS))
 
-## replacing values for correction factors: 
+## replacing values for correction factors: [Mary double check this is still needed - March 4]
 DF_test <- DF %>%
   mutate(estCfactorS = as.numeric(estCfactorS)) %>%
   mutate(estCfactorS = replace(estCfactorS, estCfactorS == 0.18018018018018, 0.869565217391304))
@@ -51,6 +51,7 @@ DF_cores <- DF_test %>%
   mutate(as.numeric(as.character(estCfactorS))) %>%
   summarise(meanCF = mean(estCfactorS), sdCF = sd(estCfactorS))
 
+## spot check a couple of sites
 DF_SAs <- DF_test %>%
   filter(SiteCode == "SAs") %>%
   select(CoreName_2, estCfactorS)
@@ -61,13 +62,13 @@ DF_BOB <- DF_test %>%
   select(CoreName_2, estCfactorS)
 View(DF_BOB)
 
-# merge the mean CF factors back into the main data frame. the CF should be the same for the whole core; i can't find methods or code for how Matt would have estimated them for each segment.
+# merge the mean CF factors back into the main data frame. the CF should be the same for the whole core; i can't find methods or code for how Matt would have estimated them for each segment. So we will proceed with a single CF factor for each core, using the mean CF value estimated above.
 
 DF2 <- DF %>%
   left_join(DF_cores)
 
 plot(DF2$meanCF, DF2$estCfactorS)
-hist(DF2$meanCF)
+hist(DF2$meanCF). # still have some 2s there. 
 
 ## having identified problems, we found the original datasheets. bring in Melisa's compaction data and merge
 CF2 <- CF %>%
@@ -85,18 +86,20 @@ DFc2 <- DFc %>%
   mutate(CF_final = as.numeric(ifelse(conversion == "Missing", meanCF, conversion))) %>%
   mutate(CF_final = ifelse(meanCF == "25", estCfactorS, CF_final)) 
 
+## spot check sites
 DF_SOO <- DFc2 %>%
   filter(SiteCode == "SOO") %>%
   select(CoreName_2, estCfactorS, meanCF, CF_final)
 View(DF_SOO)
 
 plot(DFc2$meanCF, DFc2$CF_final)
+hist(DFc2$CF_final)
 
-#now we have a datafile with no compaction corrections > 1. there are a few discrepancies between Matt's data nad Melisa's original sheets, and we estimated values for Port Joli, Port l'Hebert and Taylor's head. 
+# COMPRESSION CORRECTION FACTORS FIXED. Now we have a datafile with no compaction corrections > 1. there are a few discrepancies between Matt's data and Melisa's original sheets, and we estimated values for Port Joli, Port l'Hebert and Taylor's head. 
 
 ## for later model prediction, i think we want to get a carbon stock / cm of core depth. the segments are not even values. This is from the methods: Each core was thawed and then extruded in segments (0-2 cm, 2-5 cm, 5-10 cm, 10-20 cm, 20-30 cm, 30-40 cm, 40-50 cm, 50-60 cm) up to 60 cm in depth. So i will divide the c_stock values by corrected core thickness to get a c_stock / cm of core depth.
 
-## create new corrected values
+## Create new corrected core segment values
 DF3 <- DFc2 %>%
   mutate(corr_SD = Extracted_IntervalStart_Depth_cm * CF_final) %>%
   mutate(corr_ED = Extracted_IntervalEnd_Depth_cm * CF_final) %>%
@@ -113,6 +116,10 @@ hist(DF3$corr_thickness)
 #DF3$c_stock <- DF3$c_dens * DF3$corr_thickness
 hist(log(DF3$c_stock))
 plot(DF3$corr_segment_midpoint, DF3$corr_thickness)
+
+## DF3 is the dataset to use. 
+
+# old troubleshooting code ------------------------------------------------
 
 
 ## start here to see if the corrections make sense (they look pretty good), and re-analyze data. need core lengths from Melisa to add in the atlantic
@@ -163,12 +170,22 @@ DF_CRB <- DF %>%
 
 
 
+
 # Modeling Carbon Density -------------------------------------------------
 
+# Testing random effects
+mod0.1 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | CoreName_2, method = "ML")
 
-## results reported for depth expressed as I(1/Corrected_Midpoint_cm) and ranef of 1 | Site/Core.number. 
-## i have replaced the ranef and depth term here. 
+mod0.3 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | Site/CoreName_2, method = "ML")
 
+mod0.0 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ corr_segment_midpoint | CoreName_2, method = "ML")
+
+mod0.2 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ corr_segment_midpoint | Site/CoreName_2, method = "ML")
+
+anova(mod0.2, mod0.3, mod0.0, mod0.1)
+## mod0.2 is best
+
+## comparing fixed effects
 mod0 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 mod1 <- lme(log(c_dens) ~1 + log(REI_Raw) + Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
@@ -229,18 +246,7 @@ plot(predict(mod12), log(DF3$c_dens))
 plot(exp(predict(mod18)), DF3$c_dens)
 
 
-# Modeling Carbon Density with ranef for depth effect
-mod0.1 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | CoreName_2, method = "ML")
 
-mod0.3 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | Site/CoreName_2, method = "ML")
-
-mod0.0 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ corr_segment_midpoint | CoreName_2, method = "ML")
-
-mod0.2 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ corr_segment_midpoint | Site/CoreName_2, method = "ML")
-
-
-anova(mod0.2, mod0.3, mod0.0, mod0.1)
-## mod0.2 is best
 
 
 ## predicting: example: https://rdrr.io/cran/nlme/man/predict.lme.html
