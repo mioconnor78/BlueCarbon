@@ -6,6 +6,7 @@ library(nlme)
 library(MuMIn)
 library(car)
 library(ggplot2)
+library(effects)
 
 
 #Read in data ----
@@ -249,6 +250,19 @@ plot(predict(mod18a), log(DF3$c_dens)) # pretty similar
 plot(exp(predict(mod18a)), DF3$c_dens) # not too bad
 
 
+# plotting residuals ------------------------------------------------------
+
+plot(Effect("REI_Raw", mod18, residuals = TRUE))
+ggsave("REI_resids_C_dens.pdf", path = "./figures/", width = 5, height = 3)
+
+plot(Effect("Watercourse_NEAR_DIST.x", mod18, residuals = TRUE))
+ggsave("Watercourse_C_dens.pdf", path = "./figures/", width = 5, height = 3)
+
+plot(Effect("Percent.Silt.Fraction", mod18, residuals = TRUE))
+ggsave("Mud_C_dens.pdf", path = "./figures/", width = 5, height = 3)
+
+plot(Effect("Type", mod18, residuals = TRUE))
+ggsave("SG_C_dens.pdf", path = "./figures/", width = 5, height = 3)
 
 # Example of predicting ---------------------------------------------------
 
