@@ -15,11 +15,11 @@ DF_LOI <- read.csv(file = "./data/BlueCarbonData_1.csv")
 CF <- read.csv(file = "./data/compaction.csv")
 #DF$intertidal <- ifelse(DF$Elevation > "0", "intertidal", "subtidal")
 #DF$Coast_no <- DF[, DF$Coast == "Atlantic"] 
-DF$c_dens <- DF$OC_Per*DF$Corrected_DBD_g_cm3 # C (g / cm3)
+DF$c_dens <- (DF$OC_Per/100)*DF$Corrected_DBD_g_cm3 # C (g / cm3)
 DF$Site <- factor(DF$Site)
 DF$Type <- factor(DF$Type)
-DF <- DF %>%
-  filter(CoreName_2 != "PEI-CAR-1-BA-") ## DBD values are weird, i can probably figure this out if i try harder
+#DF <- DF %>%
+ # filter(CoreName_2 != "PEI-CAR-1-BA-") ## DBD values are weird, i can probably figure this out if i try harder; update, i fixed them
 
 
 ## notes: 
@@ -27,7 +27,8 @@ DF <- DF %>%
 
 ## DBD is a weight, normalized / cm3 by estimating the cylinder size the dirt came from. so, DBD g/cm3. c_dens is then g/cm3 b/c we just multiplied by a percent. So then we have c_dens for each cm of depth. to get the core, we add those c_dens values. so this is still g/cm3. i think i have to multiple the c_dens at each cm by the volume of that 1 cm core segment. so, x g/cm3 * 1 cm x (2*pi*2.38125) cm2 gives the s
 
-V_cseg <- pi*(2.38125^2) # volume of 1 cm of core sediment
+V_cseg <- pi*(2.38125^2) # volume of 1 cm of core sediment, cm3
+A_cseg <- 2*pi*2.38125 # area of top of core, cm2
 
 ## Now, maybe i don't need compaction factors anymore. 
 
@@ -118,8 +119,8 @@ DF3 <- DFc2 %>%
   mutate(corr_ED = Extracted_IntervalEnd_Depth_cm * CF_final) %>%
   mutate(corr_thickness = corr_ED - corr_SD) %>% 
   mutate(corr_segment_midpoint = (corr_ED + corr_SD)/2) %>%
-  mutate(c_stock = c_dens * corr_thickness) %>% #C (g / cm2)
-  select(!c(Elevation, X.y, REI_Scaled, Watercourse_NEAR_DIST.y, Corrected_Midpoint_cm_rounded, Corrected_IntervalStart_Depth_cm, Corrected_IntervalEnd_Depth_cm)) %>%
+ # mutate(c_stock = c_dens * corr_thickness) %>% #C (g / cm2)
+  select(!c(Elevation, X.y, Watercourse_NEAR_DIST.y, Corrected_Midpoint_cm_rounded, Corrected_IntervalStart_Depth_cm, Corrected_IntervalEnd_Depth_cm)) %>% #REI_Scaled,
   filter(X.1 != "142") %>%
   filter(X.1 != "429") #duplicated rows
 
@@ -127,7 +128,7 @@ View(DF3)
 plot(DF3$corr_segment_midpoint, DF3$Corrected_Midpoint_cm)
 hist(DF3$corr_thickness)
 #DF3$c_stock <- DF3$c_dens * DF3$corr_thickness
-hist(log(DF3$c_stock))
+#hist(log(DF3$c_stock))
 plot(DF3$corr_segment_midpoint, DF3$corr_thickness)
 
 ## DF3 is the dataset to use. 
@@ -188,42 +189,46 @@ DF_CRB <- DF %>%
 # Modeling Carbon Density -------------------------------------------------
 
 # Testing random effects
-mod0.1 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | CoreName_2, method = "ML")
+mod0.1 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | CoreName_2, method = "ML")
 
-mod0.3 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | Site/CoreName_2, method = "ML")
+mod0.3 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ 1 | Site/CoreName_2, method = "ML")
 
-mod0.0 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ corr_segment_midpoint | CoreName_2, method = "ML")
+mod0.0 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ corr_segment_midpoint | CoreName_2, method = "ML")
 
-mod0.2 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ corr_segment_midpoint | Site/CoreName_2, method = "ML")
+mod0.2 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~ corr_segment_midpoint | Site/CoreName_2, method = "ML")
 
 anova(mod0.2, mod0.3, mod0.0, mod0.1)
 ## mod0.2 is best
 
 ## comparing fixed effects
-mod0 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+#mod0a <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod1 <- lme(log(c_dens) ~1 + log(REI_Raw) + Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod0 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+
+#mod1a <- lme(log(c_dens) ~1 + log(REI_Raw) + Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+
+mod1 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + Type + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 ## all site level predictors
-mod2 <- lme(log(c_dens) ~1 + log(REI_Raw) + log(Watercourse_NEAR_DIST.x) + Coast, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod2 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + log(Watercourse_NEAR_DIST.x) + Coast, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod3 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod3 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + Coast, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod4 <- lme(log(c_dens) ~1 + log(REI_Raw) + log(Watercourse_NEAR_DIST.x)*Type + Coast, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod4 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + log(Watercourse_NEAR_DIST.x)*Type + Coast, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod5 <- lme(log(c_dens) ~1 + log(REI_Raw) + log(Watercourse_NEAR_DIST.x), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod5 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + log(Watercourse_NEAR_DIST.x), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod6 <- lme(log(c_dens) ~1 + log(REI_Raw), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod6 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 mod7 <- lme(log(c_dens) ~1, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 ## all site + core level predictors
 
-mod8 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + (corr_segment_midpoint), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod8 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + Coast + (corr_segment_midpoint), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod9 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + Coast + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod9 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + Coast + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod11 <- lme(log(c_dens) ~1 + log(REI_Raw) + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod11 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + log(Watercourse_NEAR_DIST.x) + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 mod12 <- lme(log(c_dens) ~1 + Type + log(Watercourse_NEAR_DIST.x) + Coast + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
@@ -235,27 +240,27 @@ mod15 <- lme(log(c_dens) ~1 + Type + log(Watercourse_NEAR_DIST.x) + sqrt(Percent
 
 mod16 <- lme(log(c_dens) ~1 + Type*log(Watercourse_NEAR_DIST.x) + Coast + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod17 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod17 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod18 <- lme(log(c_dens) ~1 + log(REI_Raw) + Type + log(Watercourse_NEAR_DIST.x) + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod18 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + Type + log(Watercourse_NEAR_DIST.x) + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 mod18a <- lme(log(c_dens) ~1 + sqrt(Percent.Silt.Fraction) + corr_segment_midpoint, data = DF3, random = ~corr_segment_midpoint| Site/CoreName_2, method = "REML")
 
-mod19 <- lme(log(c_dens) ~1 + log(REI_Raw) + Type + log(Watercourse_NEAR_DIST.x)  + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod19 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + Type + log(Watercourse_NEAR_DIST.x)  + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod20 <- lme(log(c_dens) ~1 + log(REI_Raw) + Type + log(Watercourse_NEAR_DIST.x)  + corr_segment_midpoint, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod20 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + Type + log(Watercourse_NEAR_DIST.x)  + corr_segment_midpoint, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod23 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod23 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod24 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + log(Watercourse_NEAR_DIST.x) + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod24 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
-mod25 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+mod25 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 
 model.sel(mod0, mod1, mod2,mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod11, mod12, mod13, mod14, mod15, mod16, mod17, mod18, mod18a, mod19, mod20,  mod23, mod24, mod25)
 
 ## comparing predicted vs observed values
-plot(predict(mod18), log(DF3$c_dens), xlim = c(-7,2), ylim = c(-7, 2))
+plot(predict(mod18), log(DF3$c_dens))
 plot(predict(mod15), log(DF3$c_dens))
 plot(predict(mod12), log(DF3$c_dens))
 ## best with readily available predictors
@@ -265,7 +270,7 @@ plot(exp(predict(mod18a)), DF3$c_dens) # not too bad
 
 # plotting residuals ------------------------------------------------------
 
-plot(Effect("REI_Raw", mod18, residuals = TRUE))
+plot(Effect("REI_Scaled", mod18, residuals = TRUE))
 ggsave("REI_resids_C_dens.pdf", path = "./figures/", width = 5, height = 3)
 
 plot(Effect("Watercourse_NEAR_DIST.x", mod18, residuals = TRUE))
@@ -298,7 +303,7 @@ predict(fm1, newOrth, level = 0:1)
 
 #C_density
 
-## create the new data frame with the depths we want to predict C_dens for: 1 - 100 cm
+## create the new data frame with the depths we want to predict C_dens and eventually C_stock for: 1 - 100 cm
  
 new_data4 <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), corr_segment_midpoint = rep(c(1:100), times = length(unique(DF3$CoreName_2)))) 
                       
@@ -306,13 +311,12 @@ new_data4 <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), co
 #how to get Percent.Silt.Fraction? this is a segment level variable. use mean silt val for core. 
 
 Site_info <- DF3 %>% 
-  group_by(Site, CoreName_2, REI_Raw, Type, Watercourse_NEAR_DIST.x) %>%
-  summarise(mud = mean(Percent.Silt.Fraction)) 
+  group_by(Site, CoreName_2, REI_Scaled, Type, Watercourse_NEAR_DIST.x) %>%
+  summarise(Percent.Silt.Fraction = mean(Percent.Silt.Fraction)) 
 
 #use site level variables from above
 new_data5 <- new_data4 %>%
   left_join(Site_info) %>%
-  rename(Percent.Silt.Fraction = mud) %>%
   mutate(corr_segment_midpoint = as.numeric(corr_segment_midpoint))
 
 predicted_vals <- predict(mod18, new_data5, level = 0:2)
@@ -323,15 +327,18 @@ pred_vals <- predicted_vals %>%
            sep ="/") %>%
   mutate(corr_segment_midpoint = rep(c(1:100), times = length(unique(DF3$CoreName_2)))) %>%
   mutate(c_dens = exp(log_c_dens_cm3)) %>%
-  mutate(c_stock_cm = c_dens * V_cseg) # c_stock in g per inch core
+  mutate(c_stock_cm = c_dens * V_cseg) # c_stock in g per cm core length
 
 new_data6 <- new_data5 %>%
   left_join(pred_vals) %>% 
-  group_by(Site, CoreName_2, REI_Raw, Type, Watercourse_NEAR_DIST.x, c_stock_cm) %>%
+  group_by(Site, CoreName_2, REI_Scaled, Type, Watercourse_NEAR_DIST.x) %>%
   mutate(c_60 = ifelse(corr_segment_midpoint < 61, c_stock_cm, 0)) %>%
   mutate(c_25 = ifelse(corr_segment_midpoint < 26, c_stock_cm, 0)) %>%
+  summarise_at(., c("c_stock_cm", "c_60", "c_25"), sum) %>% #C g / inch core
   rename(c_100 = c_stock_cm) %>%
-  summarise_at(., c("c_100", "c_60", "c_25"), sum)
+  mutate(c_60_cm2 = c_60/A_cseg) %>% # c_stock / cm2
+  mutate(c_100_cm2 = c_100/A_cseg) %>%
+  mutate(c_25_cm2 = c_25/A_cseg)
 
 write.csv(new_data6, file = "predicted.csv")
 
@@ -339,8 +346,15 @@ write.csv(new_data6, file = "predicted.csv")
 ## checking
 data7 <- DF3 %>%
   group_by(CoreName_2) %>%
-  summarise(Mean_c = mean(c_dens)) %>%
+  mutate(c_stock_est = (c_dens*V_cseg)/A_cseg) %>%
+  summarise(Mean_c = mean(c_stock_est)) %>%
   left_join(new_data6)
+
+hist(data7$c_100) # g carbon / 100 cm core of diameter 17 cm2, or
+hist(data7$c_100_cm2) 
+hist(data7$c_60_cm2) 
+hist(data7$c_25_cm2)
+
 
 c_stock <- ggplot(data7, aes(x = c_dens, y = c_stock_cm)) +
   geom_point() +
@@ -348,9 +362,9 @@ c_stock <- ggplot(data7, aes(x = c_dens, y = c_stock_cm)) +
   ylab("C Stock (g)") +
   ggtitle("Carbon Stock per cm of core") +
   geom_abline(intercept = 0, slope = 1)
-checking_100
+c_stock
   
-checking_100 <- ggplot(data7, aes(x = Mean_c*100, y = c_dens)) +
+checking_100 <- ggplot(data7, aes(x = Mean_c, y = c_100_cm2)) +
   geom_point() +
   xlab("C Stock est by Mean C (gC / cm^2)") +
   ylab("C Stock est by model (gC / cm^2)") +
@@ -359,7 +373,7 @@ checking_100 <- ggplot(data7, aes(x = Mean_c*100, y = c_dens)) +
 checking_100
 ggsave("Pred vs mean C_Stock 100cm.pdf", path = "./figures/", width = 4, height = 4)
 
-checking_60 <- ggplot(data7, aes(x = Mean_c*60, y = c_60a)) +
+checking_60 <- ggplot(data7, aes(x = Mean_c*.60, y = c_60_cm2)) +
   geom_point() +
   xlab("C Stock est by Mean C (gC / cm^2)") +
   ylab("C Stock est by model (gC / cm^2)") +
@@ -368,7 +382,7 @@ checking_60 <- ggplot(data7, aes(x = Mean_c*60, y = c_60a)) +
 checking_60
 ggsave("Pred vs mean C stock 60cm.pdf", path = "./figures/", width = 4, height = 4)
 
-checking_25 <- ggplot(data7, aes(x = Mean_c*25, y = c_25a)) +
+checking_25 <- ggplot(data7, aes(x = Mean_c*.25, y = c_25_cm2)) +
   geom_point() +
   xlab("C Stock est by Mean C (gC / cm^2)") +
   ylab("C Stock est by model (gC / cm^2)") +
