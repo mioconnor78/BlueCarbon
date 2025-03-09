@@ -18,6 +18,18 @@ CF <- read.csv(file = "./data/compaction.csv")
 DF$c_dens <- DF$OC_Per*DF$Corrected_DBD_g_cm3 # C (g / cm3)
 DF$Site <- factor(DF$Site)
 DF$Type <- factor(DF$Type)
+DF <- DF %>%
+  filter(CoreName_2 != "PEI-CAR-1-BA-") ## DBD values are weird, i can probably figure this out if i try harder
+
+
+## notes: 
+# Corrected_DBD_g_cm3 is already corrected for compaction. i checked Matt's PEI file and it looks good. working on Cardigan bare core 1 though that's weird. 
+
+## DBD is a weight, normalized / cm3 by estimating the cylinder size the dirt came from. so, DBD g/cm3. c_dens is then g/cm3 b/c we just multiplied by a percent. So then we have c_dens for each cm of depth. to get the core, we add those c_dens values. so this is still g/cm3. i think i have to multiple the c_dens at each cm by the volume of that 1 cm core segment. so, x g/cm3 * 1 cm x (2*pi*2.38125) cm2 gives the s
+
+V_cseg <- pi*(2.38125^2) # volume of 1 cm of core sediment
+
+## Now, maybe i don't need compaction factors anymore. 
 
 
 # Data cleaning and reconstruction  ---------------------------------------
@@ -119,6 +131,7 @@ hist(log(DF3$c_stock))
 plot(DF3$corr_segment_midpoint, DF3$corr_thickness)
 
 ## DF3 is the dataset to use. 
+write.csv(DF3, "./data/BCdataforanalysis.csv")
 
 # old troubleshooting code ------------------------------------------------
 
@@ -242,7 +255,7 @@ mod25 <- lme(log(c_dens) ~1 + log(REI_Raw)*Type + corr_segment_midpoint + sqrt(P
 model.sel(mod0, mod1, mod2,mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod11, mod12, mod13, mod14, mod15, mod16, mod17, mod18, mod18a, mod19, mod20,  mod23, mod24, mod25)
 
 ## comparing predicted vs observed values
-plot(predict(mod18), log(DF3$c_dens))
+plot(predict(mod18), log(DF3$c_dens), xlim = c(-7,2), ylim = c(-7, 2))
 plot(predict(mod15), log(DF3$c_dens))
 plot(predict(mod12), log(DF3$c_dens))
 ## best with readily available predictors
@@ -287,7 +300,7 @@ predict(fm1, newOrth, level = 0:1)
 
 ## create the new data frame with the depths we want to predict C_dens for: 1 - 100 cm
  
-new_data4 <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), corr_segment_midpoint = rep(c(1:100), times = 84)) 
+new_data4 <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), corr_segment_midpoint = rep(c(1:100), times = length(unique(DF3$CoreName_2)))) 
                       
 #merge new_data with DF3 to get site level variables: Site, REI_Raw, Type, Watercourse_NEAR_DIST.x
 #how to get Percent.Silt.Fraction? this is a segment level variable. use mean silt val for core. 
@@ -305,17 +318,20 @@ new_data5 <- new_data4 %>%
 predicted_vals <- predict(mod18, new_data5, level = 0:2)
 
 pred_vals <- predicted_vals %>%
+  rename(log_c_dens_cm3 = predict.CoreName_2) %>%
   separate(CoreName_2, into = c("Site", "CoreName_2"),
            sep ="/") %>%
-  mutate(corr_segment_midpoint = rep(c(1:100), times = 84)) %>%
-  mutate(c_dens = exp(predict.CoreName_2))
+  mutate(corr_segment_midpoint = rep(c(1:100), times = length(unique(DF3$CoreName_2)))) %>%
+  mutate(c_dens = exp(log_c_dens_cm3)) %>%
+  mutate(c_stock_cm = c_dens * V_cseg) # c_stock in g per inch core
 
 new_data6 <- new_data5 %>%
   left_join(pred_vals) %>% 
-  group_by(Site, CoreName_2, REI_Raw, Type, Watercourse_NEAR_DIST.x) %>%
-  mutate(c_60a = ifelse(corr_segment_midpoint < 61, c_dens, 0)) %>%
-  mutate(c_25a = ifelse(corr_segment_midpoint < 26, c_dens, 0)) %>%
-  summarise_at(., c("c_dens", "c_60a", "c_25a"), sum)
+  group_by(Site, CoreName_2, REI_Raw, Type, Watercourse_NEAR_DIST.x, c_stock_cm) %>%
+  mutate(c_60 = ifelse(corr_segment_midpoint < 61, c_stock_cm, 0)) %>%
+  mutate(c_25 = ifelse(corr_segment_midpoint < 26, c_stock_cm, 0)) %>%
+  rename(c_100 = c_stock_cm) %>%
+  summarise_at(., c("c_100", "c_60", "c_25"), sum)
 
 write.csv(new_data6, file = "predicted.csv")
 
@@ -325,6 +341,14 @@ data7 <- DF3 %>%
   group_by(CoreName_2) %>%
   summarise(Mean_c = mean(c_dens)) %>%
   left_join(new_data6)
+
+c_stock <- ggplot(data7, aes(x = c_dens, y = c_stock_cm)) +
+  geom_point() +
+  xlab("C_dens (g / cm3))") +
+  ylab("C Stock (g)") +
+  ggtitle("Carbon Stock per cm of core") +
+  geom_abline(intercept = 0, slope = 1)
+checking_100
   
 checking_100 <- ggplot(data7, aes(x = Mean_c*100, y = c_dens)) +
   geom_point() +
