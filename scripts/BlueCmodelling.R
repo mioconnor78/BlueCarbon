@@ -301,7 +301,7 @@ predict(fm1, newOrth, level = 0:1)
 
 # Predicting C_stocks from C_dens models -------------------------------------------------------
 
-#C_density
+#C_density _ model 18
 
 ## create the new data frame with the depths we want to predict C_dens and eventually C_stock for: 1 - 100 cm
  
@@ -311,7 +311,7 @@ new_data4 <- data.frame(CoreName_2 = rep(unique(DF3$CoreName_2), each = 100), co
 #how to get Percent.Silt.Fraction? this is a segment level variable. use mean silt val for core. 
 
 Site_info <- DF3 %>% 
-  group_by(Site, CoreName_2, REI_Scaled, Type, Watercourse_NEAR_DIST.x) %>%
+  group_by(Site, CoreName_2, REI_Scaled, Type, Watercourse_NEAR_DIST.x, Coast) %>%
   summarise(Percent.Silt.Fraction = mean(Percent.Silt.Fraction)) 
 
 #use site level variables from above
@@ -364,7 +364,7 @@ c_stock <- ggplot(data7, aes(x = c_dens, y = c_stock_cm)) +
   geom_abline(intercept = 0, slope = 1)
 c_stock
   
-checking_100 <- ggplot(data7, aes(x = Mean_c, y = c_100_cm2)) +
+checking_100 <- ggplot(data7, aes(x = I(Mean_c*100), y = c_100_cm2)) +
   geom_point() +
   xlab("C Stock est by Mean C (gC / cm^2)") +
   ylab("C Stock est by model (gC / cm^2)") +
@@ -373,7 +373,7 @@ checking_100 <- ggplot(data7, aes(x = Mean_c, y = c_100_cm2)) +
 checking_100
 ggsave("Pred vs mean C_Stock 100cm.pdf", path = "./figures/", width = 4, height = 4)
 
-checking_60 <- ggplot(data7, aes(x = Mean_c*.60, y = c_60_cm2)) +
+checking_60 <- ggplot(data7, aes(x = I(Mean_c*60), y = c_60_cm2)) +
   geom_point() +
   xlab("C Stock est by Mean C (gC / cm^2)") +
   ylab("C Stock est by model (gC / cm^2)") +
@@ -382,7 +382,7 @@ checking_60 <- ggplot(data7, aes(x = Mean_c*.60, y = c_60_cm2)) +
 checking_60
 ggsave("Pred vs mean C stock 60cm.pdf", path = "./figures/", width = 4, height = 4)
 
-checking_25 <- ggplot(data7, aes(x = Mean_c*.25, y = c_25_cm2)) +
+checking_25 <- ggplot(data7, aes(x = (Mean_c*25), y = c_25_cm2)) +
   geom_point() +
   xlab("C Stock est by Mean C (gC / cm^2)") +
   ylab("C Stock est by model (gC / cm^2)") +
@@ -390,6 +390,69 @@ checking_25 <- ggplot(data7, aes(x = Mean_c*.25, y = c_25_cm2)) +
   geom_abline(intercept = 0, slope = 1)
 checking_25
 ggsave("Pred vs mean C stock 25cm.pdf", path = "./figures/", width = 4, height = 4)
+
+
+### Predicting using model 11 - use newdata5 from above
+
+predicted_vals11 <- predict(mod11, new_data5, level = 0:2)
+
+pred_vals11 <- predicted_vals11 %>%
+  rename(log_c_dens_cm3 = predict.CoreName_2) %>%
+  separate(CoreName_2, into = c("Site", "CoreName_2"),
+           sep ="/") %>%
+  mutate(corr_segment_midpoint = rep(c(1:100), times = length(unique(DF3$CoreName_2)))) %>%
+  mutate(c_dens = exp(log_c_dens_cm3)) %>%
+  mutate(c_stock_cm = c_dens * V_cseg) # c_stock in g per cm core length
+
+new_data11 <- new_data5 %>%
+  left_join(pred_vals11) %>% 
+  group_by(Site, CoreName_2, REI_Scaled, Type, Watercourse_NEAR_DIST.x, Coast) %>%
+  mutate(c_60 = ifelse(corr_segment_midpoint < 61, c_stock_cm, 0)) %>%
+  mutate(c_25 = ifelse(corr_segment_midpoint < 26, c_stock_cm, 0)) %>%
+  summarise_at(., c("c_stock_cm", "c_60", "c_25"), sum) %>% #C g / inch core
+  rename(c_100 = c_stock_cm) %>%
+  mutate(c_60_cm2 = c_60/A_cseg) %>% # c_stock / cm2
+  mutate(c_100_cm2 = c_100/A_cseg) %>%
+  mutate(c_25_cm2 = c_25/A_cseg)
+
+write.csv(new_data11, file = "predicted11.csv")
+
+
+## checking
+data11 <- DF3 %>%
+  group_by(CoreName_2) %>%
+  mutate(c_stock_est = (c_dens*V_cseg)/A_cseg) %>%
+  summarise(Mean_c = mean(c_stock_est)) %>%
+  left_join(new_data11)
+
+checking_100_11 <- ggplot(data11, aes(x = I(Mean_c*100), y = c_100_cm2)) +
+  geom_point() +
+  xlab("C Stock est by Mean C (gC / cm^2)") +
+  ylab("C Stock est by model (gC / cm^2)") +
+  ggtitle("Carbon Stock to 100 cm Mod11 (line is 1:1)") +
+  geom_abline(intercept = 0, slope = 1)
+checking_100_11
+ggsave("Pred11 vs mean C_Stock 100cm.pdf", path = "./figures/", width = 4, height = 4)
+
+checking_60_11 <- ggplot(data11, aes(x = I(Mean_c*60), y = c_60_cm2)) +
+  geom_point() +
+  xlab("C Stock est by Mean C (gC / cm^2)") +
+  ylab("C Stock est by model (gC / cm^2)") +
+  ggtitle("Carbon Stock to 60 cm mod11 (line is 1:1)") +
+  geom_abline(intercept = 0, slope = 1)
+checking_60_11
+ggsave("Pred11 vs mean C stock 60cm.pdf", path = "./figures/", width = 4, height = 4)
+
+checking_25_11 <- ggplot(data11, aes(x = (Mean_c*25), y = c_25_cm2)) +
+  geom_point() +
+  xlab("C Stock est by Mean C (gC / cm^2)") +
+  ylab("C Stock est by model (gC / cm^2)") +
+  ggtitle("Carbon Stock to 25 cm mod11 (line is 1:1)") +
+  geom_abline(intercept = 0, slope = 1)
+checking_25
+ggsave("Pred11 vs mean C stock 25cm.pdf", path = "./figures/", width = 4, height = 4)
+
+
 
 
 
