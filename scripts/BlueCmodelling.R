@@ -327,7 +327,9 @@ pred_vals <- predicted_vals %>%
            sep ="/") %>%
   mutate(corr_segment_midpoint = rep(c(1:100), times = length(unique(DF3$CoreName_2)))) %>%
   mutate(c_dens = exp(log_c_dens_cm3)) %>%
-  mutate(c_stock_cm = c_dens * V_cseg) # c_stock in g per cm core length
+  mutate(c_stock_cm = c_dens * V_cseg)  # c_stock in g per cm core length
+ # mutate(c_stock_bythickness = c_dens*). -> then summarize for each core
+
 
 new_data6 <- new_data5 %>%
   left_join(pred_vals) %>% 
@@ -338,9 +340,9 @@ new_data6 <- new_data5 %>%
   rename(c_100 = c_stock_cm) %>%
   mutate(c_60_cm2 = c_60/A_cseg) %>% # c_stock / cm2
   mutate(c_100_cm2 = c_100/A_cseg) %>%
-  mutate(c_25_cm2 = c_25/A_cseg)
+  mutate(c_25_cm2 = c_25/A_cseg) 
 
-write.csv(new_data6, file = "predicted.csv")
+write.csv(new_data6, file = "./data/predicted_mod18.csv")
 
 
 ## checking
