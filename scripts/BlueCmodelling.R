@@ -27,8 +27,8 @@ DF$Type <- factor(DF$Type)
 
 ## DBD is a weight, normalized / cm3 by estimating the cylinder size the dirt came from. so, DBD g/cm3. c_dens is then g/cm3 b/c we just multiplied by a percent. So then we have c_dens for each cm of depth. to get the core, we add those c_dens values. so this is still g/cm3. i think i have to multiple the c_dens at each cm by the volume of that 1 cm core segment. so, x g/cm3 * 1 cm x (2*pi*2.38125) cm2 gives the s
 
-V_cseg <- pi*(2.38125^2) # volume of 1 cm of core sediment, cm3
-A_cseg <- 2*pi*2.38125 # area of top of core, cm2
+V_cseg <- pi*(2.38125^2) *1 # volume of 1 cm of core sediment, cm3
+A_cseg <- pi*(2.38125^2) # area of top of core, cm2
 
 ## Now, maybe i don't need compaction factors anymore. 
 
@@ -108,6 +108,7 @@ View(DF_SOO)
 
 plot(DFc2$meanCF, DFc2$CF_final)
 hist(DFc2$CF_final)
+mean(DFc2$CF_final)
 
 # COMPRESSION CORRECTION FACTORS FIXED. Now we have a datafile with no compaction corrections > 1. there are a few discrepancies between Matt's data and Melisa's original sheets, and we estimated values for Port Joli, Port l'Hebert and Taylor's head. 
 
@@ -218,6 +219,8 @@ mod4 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + log(Watercourse_NEAR_DIST.x)*Typ
 
 mod5 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + log(Watercourse_NEAR_DIST.x), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
+mod22 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + log(Watercourse_NEAR_DIST.x) + Type, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+
 mod6 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 mod7 <- lme(log(c_dens) ~1, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
@@ -250,6 +253,8 @@ mod19 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + Type + log(Watercourse_NEAR_DIS
 
 mod20 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled) + Type + log(Watercourse_NEAR_DIST.x)  + corr_segment_midpoint, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
+mod21 <- lme(log(c_dens) ~1 + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+
 mod23 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + Coast + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 mod24 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.x) + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
@@ -257,7 +262,7 @@ mod24 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + log(Watercourse_NEAR_DIST.
 mod25 <- lme(log(c_dens) ~1 + sqrt(REI_Scaled)*Type + corr_segment_midpoint + sqrt(Percent.Silt.Fraction), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
 
 
-model.sel(mod0, mod1, mod2,mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod11, mod12, mod13, mod14, mod15, mod16, mod17, mod18, mod18a, mod19, mod20,  mod23, mod24, mod25)
+model.sel(mod0, mod1, mod2,mod3, mod4, mod5, mod6, mod7, mod8, mod9, mod11, mod12, mod13, mod14, mod15, mod16, mod17, mod18, mod18a, mod19, mod20, mod21, mod22, mod23, mod24, mod25)
 
 ## comparing predicted vs observed values
 plot(predict(mod18), log(DF3$c_dens))
@@ -266,6 +271,8 @@ plot(predict(mod12), log(DF3$c_dens))
 ## best with readily available predictors
 plot(predict(mod18a), log(DF3$c_dens)) # pretty similar
 plot(exp(predict(mod18a)), DF3$c_dens) # not too bad
+
+
 
 
 # plotting residuals ------------------------------------------------------
@@ -281,6 +288,17 @@ ggsave("Mud_C_dens.pdf", path = "./figures/", width = 5, height = 3)
 
 plot(Effect("Type", mod18, residuals = TRUE))
 ggsave("SG_C_dens.pdf", path = "./figures/", width = 5, height = 3)
+
+
+# Modeling mud and silt content -------------------------------------------
+
+> mod18s <- lme(sqrt(Percent.Silt.Fraction) ~1 + sqrt(REI_Scaled) + Type + log(Watercourse_NEAR_DIST.x), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+> mod1s <- lme(sqrt(Percent.Silt.Fraction) ~1 + sqrt(REI_Scaled) + log(Watercourse_NEAR_DIST.x), data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+> mod2s <- lme(sqrt(Percent.Silt.Fraction) ~1 + sqrt(REI_Scaled) + Type, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+> mod3s <- lme(sqrt(Percent.Silt.Fraction) ~1 + Type, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+> mod4s <- lme(sqrt(Percent.Silt.Fraction) ~1, data = DF3, random = ~corr_segment_midpoint | Site/CoreName_2, method = "REML")
+> model.sel(mod18s, mod1s, mod2s, mod3s, mod4s)
+
 
 # Example of predicting ---------------------------------------------------
 
@@ -393,6 +411,14 @@ checking_25 <- ggplot(data7, aes(x = (Mean_c*25), y = c_25_cm2)) +
 checking_25
 ggsave("Pred vs mean C stock 25cm.pdf", path = "./figures/", width = 4, height = 4)
 
+data7s <- subset(data7, Type == "SG")
+(range(data7s$c_25_cm2))*10000
+(mean(data7s$c_25_cm2))*10000
+(mean(data7s$c_25_cm2)) # g / cm2
+(range(data7s$c_100_cm2))*10000
+(mean(data7s$c_100_cm2))*10000
+(mean(data7s$c_100_cm2))
+(sd(data7s$c_100_cm2))*10000
 
 ### Predicting using model 11 - use newdata5 from above
 
@@ -455,8 +481,10 @@ checking_25
 ggsave("Pred11 vs mean C stock 25cm.pdf", path = "./figures/", width = 4, height = 4)
 
 
-
-
+data7s <- subset(data7, Type == "SG")
+(range(data7s$c_100_cm2))*10000
+(range(data7s$c_60_cm2))*10000
+(range(data7s$c_25_cm2))*10000
 
 # Modeling carbon stock ---------------------------------------------------
 
@@ -760,8 +788,11 @@ Cdens_coredepth_MIS
 DF_LOI <- DF_LOI %>%
   filter(X != "72")
 
-DFF <- DF3 %>%
-  left_join(DF_LOI, by = c("CoreName_2", "Extracted_IntervalStart_Depth_cm"))
+DFF <- DF_LOI %>%
+  left_join(DF3, by = c("CoreName_2", "Extracted_IntervalStart_Depth_cm")) %>%
+  mutate(LOI_Percent = LOI_Percent/100) %>%
+  mutate(OC_Per = OC_Per.x/100) %>%
+  filter(SiteCode.x != "SIp")
   
 plot(log(DFF$LOI_Percent) ~ log(DFF$c_dens))
 plot(log(DFF$LOI_Percent) ~ log(DFF$OC_Per.x))
@@ -772,56 +803,44 @@ lm(log(DFF$LOI_Percent) ~ log(DFF$c_dens))
 lm(log(DFF$LOI_Percent) ~ log(DFF$OC_Per.x))
 
 
-## facet plot of LOI as possible predictor of c_dens, c_stock and OC_Per
+## facet plot of LOI as possible predictor of C_org (Percent dry weight). c_dens, c_stock and OC_Per
 
-# c_dens logged
-mod1 <- lm(log(DFF$c_dens) ~ log(DFF$LOI_Percent))
+# c_percent
+mod1 <- lm((DFF$OC_Per) ~ (DFF$LOI_Percent))
 summary(mod1)
 
 LOI_fun <- function(x) coef(mod1)[2] * (x) + coef(mod1)[1]
 
-LOI_c_dens <- ggplot(DFF, aes(x = log(LOI_Percent), y = log(c_dens))) +
+LOI_c_per <- ggplot(DFF, aes(x = LOI_Percent, y = OC_Per)) +
   geom_point() + 
   theme_bw() +
-  geom_function(fun = LOI_fun)
-  
-LOI_c_dens
+  geom_function(fun = LOI_fun) +
+  geom_abline(intercept = 0, slope = 1)
 
+LOI_c_per
 
-#c_dens untransformed
-mod1 <- lm((DFF$c_dens) ~ (DFF$LOI_Percent))
-summary(mod1)
-
-LOI_fun <- function(x) coef(mod1)[2] * (x) + coef(mod1)[1]
-
-LOI_c_dens <- ggplot(DFF, aes(x = (LOI_Percent), y = (c_dens))) +
-  geom_point() + 
-  theme_bw() +
-  geom_function(fun = LOI_fun)
-
-LOI_c_dens
-
-# c_stock logged
-mod2 <- lm(log(DFF$c_stock + 0.01) ~ log(DFF$LOI_Percent))
+# c_percent_transformed
+mod2 <- lm(sqrt(DFF$OC_Per) ~ sqrt(DFF$LOI_Percent))
 summary(mod2)
 
-LOI_fun <- function(x) coef(mod2)[2] * (x) + coef(mod2)[1]
+LOI_fun2 <- function(x) coef(mod2)[2] * (x) + coef(mod2)[1]
 
-LOI_c_stock <- ggplot(DFF, aes(x = log(LOI_Percent), y = log(c_stock + 0.01))) +
+LOI_OCPer2 <- ggplot(DFF, aes(x = sqrt(LOI_Percent), y = sqrt(OC_Per))) +
   geom_point() + 
   theme_bw() +
-  geom_function(fun = LOI_fun)
+  geom_function(fun = LOI_fun2) +
+  geom_abline(intercept = 0, slope = 1)
+  
+LOI_OCPer2
 
-LOI_c_stock
 
-
-# OC_Per logged
-mod3 <- lm(log(DFF$OC_Per.x) ~ log(DFF$LOI_Percent))
+# c_percent_transformed
+mod3 <- lm(log(DFF$OC_Per) ~ log(DFF$LOI_Percent))
 summary(mod3)
 
-LOI_fun <- function(x) coef(mod3)[2] * (x) + coef(mod3)[1]
+LOI_fun3 <- function(x) coef(mod3)[2] * (x) + coef(mod3)[1]
 
-LOI_c_OC <- ggplot(DFF, aes(x = log(LOI_Percent), y = log(OC_Per.x))) +
+LOI_OCPer3 <- ggplot(DFF, aes(x = log(LOI_Percent), y = log(OC_Per))) +
   geom_point() + 
   theme_bw() +
   theme(axis.line = element_line(color='black'),
@@ -830,19 +849,54 @@ LOI_c_OC <- ggplot(DFF, aes(x = log(LOI_Percent), y = log(OC_Per.x))) +
         panel.grid.minor = element_blank(),) +
   geom_smooth(method=lm , color="black", se=TRUE) +
   #geom_function(fun = LOI_fun) +
-  ylab("Percent Organic Carbon (ln(%))") +
-  xlab("LOI estimate (ln(%))") +
-  ylim(-4, 2) +
-  annotate("text", x = 1, y=2, label = paste("R^2 == 0.88"), parse = TRUE) +
-  annotate("text", x = 0, y=2, label = ("y = 1.34x - 1.59"))
+  annotate("text", x = -4.5, y=-3.5, label = paste("R^2 == 0.88"), parse = TRUE) +
+  annotate("text", x = -4.5, y=-3, label = ("y = 1.33x - 0.08")) +
+  xlab("Loss on Ignition (LOI) ln(%)") +
+  ylab("Organic Carbon from Elemental Analysis ln(%)") #+
+ # ggtitle("Carbon estimated by Elemental Analysis and LOI") +
+ # geom_function(fun = LOI_fun3, color = "red") #+
+  #geom_abline(intercept = 0, slope = 1)
 
-LOI_c_OC
+LOI_OCPer3
+ggsave("OC_LOI.tiff", path = "./figures/", width = 4, height = 4)
 
-ggsave("LOI_OC.pdf", path = "./figures", width = 4, height = 4)
+# quick model comparison
 
-## ok next steps: 
-# make a clean plot, with appropriate scale - done
-# this is an exact repeat of Matt's; is that right?
-# methods text
-# predicted values (do this first)
+#remove SiteCode.x = SIp
+
+mod30 <- lme(log(OC_Per) ~ 1 + log(LOI_Percent), data = DFF, random = ~ 1 | SiteName2/CoreName_2)
+
+mod3a <- lme(log(OC_Per) ~ 1 + log(LOI_Percent) + sqrt(REI_Scaled), data = DFF, random = ~ 1 | SiteName2/CoreName_2)  
+
+mod3b <- lm(log(DFF$OC_Per) ~ 1 + log(LOI_Percent) * sqrt(REI_Scaled), data = DFF, random = ~ 1 | SiteName2/CoreName_2)  
+
+mod3c <- lm(log(DFF$OC_Per) ~ log(DFF$LOI_Percent)*sqrt(DFF$REI_Scaled))
+
+mod3d <- lm(log(DFF$OC_Per) ~ log(DFF$LOI_Percent)*log(DFF$Watercourse_NEAR_DIST.x))
+
+model.sel(mod30, mod3a)
+View(DFF)
+
+hist(DFF$LOI_Percent)
      
+length(unique(DF3$CoreName_2))
+length(unique(DF3$SiteCode))
+
+0.263^2
+#estimate marginal SG effect / cm2 surface area
+
+exp(0.088) * V_cseg * 100 / A_cseg
+exp(0.088) * V_cseg * 25 / A_cseg
+
+## mean of analyzed c_dens
+mean(log(DF3$c_dens)) + 0.088
+mean(log(DF3$c_dens))
+
+exp(mean(log(DF3$c_dens)) + 0.088) - exp(mean(log(DF3$c_dens)))
+
+exp(min(log(DF3$c_dens)) + 0.088) - exp(min(log(DF3$c_dens)))
+
+exp(max(log(DF3$c_dens)) + 0.088) - exp(max(log(DF3$c_dens)))
+
+# coef from model 18 for SG is 0.088. so the backtransformed value would be exp(0.088), or 1.09 g C / cm3 with SG vs without. The problem is that mean raw values for gC/cm3 range from 6.9 x 10 ^-6 - 5.66 x 10 ^-2, so this 1 unit addition is way out of proportion. 
+## ok so mean (log(c_dens)) = -5.69, and the 0.088 marginal effect on that is reasonable. right so we can't backtransform the effect size so easily. 
