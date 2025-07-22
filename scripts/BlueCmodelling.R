@@ -65,16 +65,17 @@ DF_cores <- DF_test %>%
   mutate(as.numeric(as.character(estCfactorS))) %>%
   summarise(meanCF = mean(estCfactorS), sdCF = sd(estCfactorS))
 
-## spot check a couple of sites
-DF_SAs <- DF_test %>%
-  filter(SiteCode == "SAs") %>%
-  select(CoreName_2, estCfactorS)
-View(DF_SAs)
 
-DF_BOB <- DF_test %>%
-  filter(SiteCode == "BOB") %>%
-  select(CoreName_2, estCfactorS)
-View(DF_BOB)
+## spot check a couple of sites
+#DF_SAs <- DF_test %>%
+#  filter(SiteCode == "SAs") %>%
+#  select(CoreName_2, estCfactorS)
+#View(DF_SAs)
+
+#DF_BOB <- DF_test %>%
+#  filter(SiteCode == "BOB") %>%
+#  select(CoreName_2, estCfactorS)
+#View(DF_BOB)
 
 # merge the mean CF factors back into the main data frame. the CF should be the same for the whole core; i can't find methods or code for how Matt would have estimated them for each segment. So we will proceed with a single CF factor for each core, using the mean CF value estimated above.
 
@@ -82,7 +83,7 @@ DF2 <- DF %>%
   left_join(DF_cores)
 
 plot(DF2$meanCF, DF2$estCfactorS)
-hist(DF2$meanCF). # still have some 2s there. 
+hist(DF2$meanCF) # still have some 2s there. 
 
 ## having identified problems, we found the original datasheets. bring in Melisa's compaction data and merge
 CF2 <- CF %>%
@@ -110,6 +111,8 @@ plot(DFc2$meanCF, DFc2$CF_final)
 hist(DFc2$CF_final)
 mean(DFc2$CF_final)
 
+
+
 # COMPRESSION CORRECTION FACTORS FIXED. Now we have a datafile with no compaction corrections > 1. there are a few discrepancies between Matt's data and Melisa's original sheets, and we estimated values for Port Joli, Port l'Hebert and Taylor's head. 
 
 ## for later model prediction, i think we want to get a carbon stock / cm of core depth. the segments are not even values. This is from the methods: Each core was thawed and then extruded in segments (0-2 cm, 2-5 cm, 5-10 cm, 10-20 cm, 20-30 cm, 30-40 cm, 40-50 cm, 50-60 cm) up to 60 cm in depth. So i will divide the c_stock values by corrected core thickness to get a c_stock / cm of core depth.
@@ -131,6 +134,14 @@ hist(DF3$corr_thickness)
 #DF3$c_stock <- DF3$c_dens * DF3$corr_thickness
 #hist(log(DF3$c_stock))
 plot(DF3$corr_segment_midpoint, DF3$corr_thickness)
+
+## create data file with core info
+core_info <- DF3 %>%
+  group_by(Coast, Type, Site, Core.Number, CF_final, REI_Raw, Watercourse_NEAR_DIST.x) %>%
+  summarise(mean_mud = mean(Percent.Silt.Fraction))
+
+
+write.csv(core_info, "./data/core_info.csv")
 
 ## DF3 is the dataset to use. 
 write.csv(DF3, "./data/BCdataforanalysis.csv")
@@ -356,24 +367,38 @@ new_data6 <- new_data5 %>%
   mutate(c_25 = ifelse(corr_segment_midpoint < 26, c_stock_cm, 0)) %>%
   summarise_at(., c("c_stock_cm", "c_60", "c_25"), sum) %>% #C g / inch core
   rename(c_100 = c_stock_cm) %>%
-  mutate(c_60_cm2 = c_60/A_cseg) %>% # c_stock / cm2
-  mutate(c_100_cm2 = c_100/A_cseg) %>%
-  mutate(c_25_cm2 = c_25/A_cseg) 
+  mutate(c_60_m2 = 10000*(c_60/A_cseg)) %>% # c_stock / cm2
+  mutate(c_100_m2 = 10000*(c_100/A_cseg)) %>%
+  mutate(c_25_m2 = 10000*(c_25/A_cseg)) 
 
 write.csv(new_data6, file = "./data/predicted_mod18.csv")
 
+TableS3 <- new_data5 %>%
+  left_join(pred_vals) %>% 
+  group_by(Coast, Site, CoreName_2, Type, Watercourse_NEAR_DIST.x, Percent.Silt.Fraction) %>%
+  mutate(c_60 = ifelse(corr_segment_midpoint < 61, c_stock_cm, 0)) %>%
+  mutate(c_25 = ifelse(corr_segment_midpoint < 26, c_stock_cm, 0)) %>%
+  summarise_at(., c("c_stock_cm", "c_60", "c_25"), sum) %>% #C g / inch core
+  rename(c_100 = c_stock_cm) %>%
+  mutate(c_60_m2 = 10000*(c_60/A_cseg)) %>% # c_stock / cm2
+  mutate(c_100_m2 = 10000*(c_100/A_cseg)) %>%
+  mutate(c_25_m2 = 10000*(c_25/A_cseg)) 
+
+View(TableS3)
+write.csv(TableS3, file = "./data/TableS3.csv")
 
 ## checking
 data7 <- DF3 %>%
   group_by(CoreName_2) %>%
-  mutate(c_stock_est = (c_dens*V_cseg)/A_cseg) %>%
+  mutate(c_stock_est = 10000*(c_dens*V_cseg)/A_cseg) %>%
   summarise(Mean_c = mean(c_stock_est)) %>%
+  mutate(ln_mnC = log(Mean_c)) %>%
   left_join(new_data6)
 
 hist(data7$c_100) # g carbon / 100 cm core of diameter 17 cm2, or
-hist(data7$c_100_cm2) 
-hist(data7$c_60_cm2) 
-hist(data7$c_25_cm2)
+hist(data7$c_100_m2) 
+hist(data7$c_60_m2) 
+hist(data7$c_25_m2)
 
 
 c_stock <- ggplot(data7, aes(x = c_dens, y = c_stock_cm)) +
@@ -384,32 +409,38 @@ c_stock <- ggplot(data7, aes(x = c_dens, y = c_stock_cm)) +
   geom_abline(intercept = 0, slope = 1)
 c_stock
   
-checking_100 <- ggplot(data7, aes(x = I(Mean_c*100), y = c_100_cm2)) +
+checking_100 <- ggplot(data7, aes(x = (Mean_c*100), y = c_100_m2)) +
   geom_point() +
-  xlab("C Stock est by Mean C (gC / cm^2)") +
-  ylab("C Stock est by model (gC / cm^2)") +
-  ggtitle("Carbon Stock to 100 cm (line is 1:1)") +
+  xlab("C Stock est by Mean C (gC / m^2)") +
+  xlim(0, 60000) +
+  ylim(0, 60000) +
+  ylab("C Stock est by model (gC / m^2)") +
+  ggtitle("Carbon Stock to 100 cm") +
   geom_abline(intercept = 0, slope = 1)
 checking_100
-ggsave("Pred vs mean C_Stock 100cm.pdf", path = "./figures/", width = 4, height = 4)
+ggsave("Pred vs mean C_Stock 100cm.tiff", path = "./figures/", width = 4, height = 4)
 
-checking_60 <- ggplot(data7, aes(x = I(Mean_c*60), y = c_60_cm2)) +
+checking_60 <- ggplot(data7, aes(x = (Mean_c*60), y = c_60_m2)) +
   geom_point() +
-  xlab("C Stock est by Mean C (gC / cm^2)") +
-  ylab("C Stock est by model (gC / cm^2)") +
-  ggtitle("Carbon Stock to 60 cm (line is 1:1)") +
+  xlab("C Stock est by Mean C (gC / m^2)") +
+  xlim(0, 35000) +
+  ylim(0, 35000) +
+  ylab("C Stock est by model (gC / m^2)") +
+  ggtitle("Carbon Stock to 60 cm") +
   geom_abline(intercept = 0, slope = 1)
 checking_60
-ggsave("Pred vs mean C stock 60cm.pdf", path = "./figures/", width = 4, height = 4)
+ggsave("Pred vs mean C stock 60cm.tiff", path = "./figures/", width = 4, height = 4)
 
-checking_25 <- ggplot(data7, aes(x = (Mean_c*25), y = c_25_cm2)) +
-  geom_point() +
-  xlab("C Stock est by Mean C (gC / cm^2)") +
-  ylab("C Stock est by model (gC / cm^2)") +
-  ggtitle("Carbon Stock to 25 cm (line is 1:1)") +
-  geom_abline(intercept = 0, slope = 1)
+checking_25 <- ggplot(data7, aes(x = (Mean_c*25), y = c_25_m2)) +
+    geom_point() +
+    xlab("C Stock est by Mean C (gC / m^2)") +
+    xlim(0, 15000) +
+    ylim(0, 15000) +
+    ylab("C Stock est by model (gC / m^2)") +
+      ggtitle("Carbon Stock to 25 cm") +
+      geom_abline(intercept = 0, slope = 1)
 checking_25
-ggsave("Pred vs mean C stock 25cm.pdf", path = "./figures/", width = 4, height = 4)
+ggsave("Pred vs mean C stock 25cm.tiff", path = "./figures/", width = 4, height = 4)
 
 data7s <- subset(data7, Type == "SG")
 (range(data7s$c_25_cm2))*10000
@@ -430,7 +461,7 @@ pred_vals11 <- predicted_vals11 %>%
            sep ="/") %>%
   mutate(corr_segment_midpoint = rep(c(1:100), times = length(unique(DF3$CoreName_2)))) %>%
   mutate(c_dens = exp(log_c_dens_cm3)) %>%
-  mutate(c_stock_cm = c_dens * V_cseg) # c_stock in g per cm core length
+  mutate(c_stock_cm = c_dens * V_cseg) # c_stock in g per cm core length, these are not normally distributed now so be careful with means!
 
 new_data11 <- new_data5 %>%
   left_join(pred_vals11) %>% 
@@ -439,9 +470,12 @@ new_data11 <- new_data5 %>%
   mutate(c_25 = ifelse(corr_segment_midpoint < 26, c_stock_cm, 0)) %>%
   summarise_at(., c("c_stock_cm", "c_60", "c_25"), sum) %>% #C g / inch core
   rename(c_100 = c_stock_cm) %>%
-  mutate(c_60_cm2 = c_60/A_cseg) %>% # c_stock / cm2
+  mutate(c_60_cm2 = c_60/A_cseg) %>% # c_stock / cm2 
   mutate(c_100_cm2 = c_100/A_cseg) %>%
-  mutate(c_25_cm2 = c_25/A_cseg)
+  mutate(c_25_cm2 = c_25/A_cseg) %>%
+  mutate(c_60_m2 = c_60_cm2*10000) %>% # c_stock / cm2 
+  mutate(c_100_m2 = c_100_cm2*10000) %>%
+  mutate(c_25_m2 = c_25_cm2*10000)
 
 write.csv(new_data11, file = "predicted11.csv")
 
@@ -481,10 +515,118 @@ checking_25
 ggsave("Pred11 vs mean C stock 25cm.pdf", path = "./figures/", width = 4, height = 4)
 
 
-data7s <- subset(data7, Type == "SG")
-(range(data7s$c_100_cm2))*10000
-(range(data7s$c_60_cm2))*10000
-(range(data7s$c_25_cm2))*10000
+data11s <- subset(data11, Type == "SG")
+(range(data11s$c_100_cm2))*10000
+(range(data11s$c_60_cm2))*10000
+(range(data11s$c_25_cm2))*10000
+
+sitetypes <- data11 %>%
+  group_by(Site, Coast, Mean_c) %>%
+  summarise(coretype = (unique(Type)))
+
+SG_100 <- data11 %>%
+  group_by(Type) %>%
+  summarise(mean_c100 = (mean(log(c_100_m2)))) %>%
+  mutate(bt_mean = exp(mean_c100))
+SG_100
+
+coasts_100 <- data11 %>%
+  group_by(Coast, Type) %>%
+  summarise(mean_c100 = (mean(log(c_100_m2)))) 
+coasts_100
+
+coasts_100_2 <- data11 %>%
+  group_by(Coast, Type) %>%
+  summarise(sd_c100 = (sd(log(c_100_m2)))) %>%
+  left_join(coasts_100) %>%
+  mutate(BT_m = exp(mean_c100)) %>%
+  mutate(BT_sdh = exp(mean_c100 + sd_c100)) %>%
+  mutate(BT_sdl = exp(mean_c100 - sd_c100))
+
+coasts_100_2
+
+coasts_60 <- data11 %>%
+  group_by(Coast, Type) %>%
+  summarise(mean_c60 = (mean(log(c_60_m2)))) 
+
+coasts_60_2 <- data11 %>%
+  group_by(Coast, Type) %>%
+  summarise(sd_c60 = (sd(log(c_60_m2)))) %>%
+  left_join(coasts_60) %>%
+  mutate(BT_m = exp(mean_c60)) %>%
+  mutate(BT_sdh = exp(mean_c60 + sd_c60)) %>%
+  mutate(BT_sdl = exp(mean_c60 - sd_c60))
+
+coasts_60_2
+
+coasts_25 <- data11 %>%
+  group_by(Coast, Type) %>%
+  summarise(mean_c25 = (mean(log(c_25_m2)))) 
+
+coasts_25_2 <- data11 %>%
+  group_by(Coast, Type) %>%
+  summarise(sd_c25 = (sd(log(c_25_m2)))) %>%
+  left_join(coasts_25) %>%
+  mutate(BT_m = exp(mean_c25)) %>%
+  mutate(BT_sdh = exp(mean_c25 + sd_c25)) %>%
+  mutate(BT_sdl = exp(mean_c25 - sd_c25))
+
+coasts_25_2
+
+atlantic_hist <- ggplot(subset(data11, Coast == "Atlantic"), aes(log(Mean_c))) +
+                          geom_histogram(aes(fill=factor(Type)))
+atlantic_hist 
+
+pacific_hist <- ggplot(subset(data11, Coast == "Pacific"), aes(log(Mean_c))) +
+  geom_histogram(aes(fill=factor(Type)))
+pacific_hist
+
+gulf_hist <- ggplot(subset(data11, Coast == "Gulf of St.Lawrence"), aes(log(Mean_c))) +
+  geom_histogram(aes(fill=factor(Type)), binwidth = 0.0001)
+gulf_hist
+
+#table 4 - try with raw values and not predicted? trying to reconcile model with higher carbon in bare, wiht results of more in SG in the coefficient...
+mean(data11[data11$Coast == "Atlantic" & data11$Type == "BA", ]$c_100_cm2)*10000
+mean(data11[data11$Coast == "Atlantic" & data11$Type == "SG", ]$c_100_cm2)*10000
+mean(data11[data11$Coast == "Pacific" & data11$Type == "BA", ]$c_100_cm2)*10000
+mean(data11[data11$Coast == "Pacific" & data11$Type == "SG", ]$c_100_cm2)*10000
+mean(data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "BA", ]$c_100_cm2)*10000
+mean(data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "SG", ]$c_100_cm2)*10000
+
+sd((data11[data11$Coast == "Atlantic" & data11$Type == "BA", ]$c_100_cm2)*10000)
+sd((data11[data11$Coast == "Atlantic" & data11$Type == "SG", ]$c_100_cm2)*10000)
+sd((data11[data11$Coast == "Pacific" & data11$Type == "BA", ]$c_100_cm2)*10000)
+sd((data11[data11$Coast == "Pacific" & data11$Type == "SG", ]$c_100_cm2)*10000)
+sd((data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "BA", ]$c_100_cm2)*10000)
+sd((data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "SG", ]$c_100_cm2)*10000)
+
+mean(data11[data11$Coast == "Atlantic" & data11$Type == "BA", ]$c_60_cm2)*10000
+mean(data11[data11$Coast == "Atlantic" & data11$Type == "SG", ]$c_60_cm2)*10000
+mean(data11[data11$Coast == "Pacific" & data11$Type == "BA", ]$c_60_cm2)*10000
+mean(data11[data11$Coast == "Pacific" & data11$Type == "SG", ]$c_60_cm2)*10000
+mean(data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "BA", ]$c_60_cm2)*10000
+mean(data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "SG", ]$c_60_cm2)*10000
+
+sd((data11[data11$Coast == "Atlantic" & data11$Type == "BA", ]$c_60_cm2)*10000)
+sd((data11[data11$Coast == "Atlantic" & data11$Type == "SG", ]$c_60_cm2)*10000)
+sd((data11[data11$Coast == "Pacific" & data11$Type == "BA", ]$c_60_cm2)*10000)
+sd((data11[data11$Coast == "Pacific" & data11$Type == "SG", ]$c_60_cm2)*10000)
+sd((data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "BA", ]$c_60_cm2)*10000)
+sd((data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "SG", ]$c_60_cm2)*10000)
+
+mean(data11[data11$Coast == "Atlantic" & data11$Type == "BA", ]$c_25_cm2)*10000
+mean(data11[data11$Coast == "Atlantic" & data11$Type == "SG", ]$c_25_cm2)*10000
+mean(data11[data11$Coast == "Pacific" & data11$Type == "BA", ]$c_25_cm2)*10000
+mean(data11[data11$Coast == "Pacific" & data11$Type == "SG", ]$c_25_cm2)*10000
+mean(data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "BA", ]$c_25_cm2)*10000
+mean(data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "SG", ]$c_25_cm2)*10000
+
+sd((data11[data11$Coast == "Atlantic" & data11$Type == "BA", ]$c_25_cm2)*10000)
+sd((data11[data11$Coast == "Atlantic" & data11$Type == "SG", ]$c_25_cm2)*10000)
+sd((data11[data11$Coast == "Pacific" & data11$Type == "BA", ]$c_25_cm2)*10000)
+sd((data11[data11$Coast == "Pacific" & data11$Type == "SG", ]$c_25_cm2)*10000)
+sd((data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "BA", ]$c_25_cm2)*10000)
+sd((data11[data11$Coast == "Gulf of St.Lawrence" & data11$Type == "SG", ]$c_25_cm2)*10000)
 
 # Modeling carbon stock ---------------------------------------------------
 
